@@ -14,14 +14,16 @@
     "evaluate": "tsx --env-file-if-exists=.env apps/cli/src/evaluate.ts",
     "probe:extract": "tsx --env-file=.env tools/probes/extract-probe.ts",
     "probe:schema": "tsx --env-file=.env tools/probes/response-schema-probe.ts",
-    "probe:cookie": "tsx --env-file=.env tools/probes/cookie-probe.ts",
+    "probe:cookie": "tsx --env-file-if-exists=.env tools/probes/cookie-probe.ts",
     "probe:budget": "tsx --env-file=.env tools/probes/rate-budget-probe.ts",
     "probe:all": "npm run probe:schema && npm run probe:budget",
     "probe:models": "tsx --env-file=.env tools/probes/model-latency-probe.ts",
     "sites": "tsx tools/local-site-server.ts",
     "clean": "rm -rf packages/*/dist apps/*/dist && find . -name '*.tsbuildinfo' -not -path './node_modules/*' -delete",
     "probe:search": "tsx --env-file-if-exists=.env tools/probes/search-probe.ts",
-    "dev:api": "npm run dev --workspace @prepkit/api"
+    "dev:api": "npm run dev --workspace @prepkit/api",
+    "dev:web": "npm run dev --workspace @prepkit/web",
+    "dev": "npm run sites & npm run dev:api & npm run dev:web"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
