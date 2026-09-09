@@ -20,7 +20,8 @@
     "probe:models": "tsx --env-file=.env tools/probes/model-latency-probe.ts",
     "sites": "tsx tools/local-site-server.ts",
     "clean": "rm -rf packages/*/dist apps/*/dist && find . -name '*.tsbuildinfo' -not -path './node_modules/*' -delete",
-    "probe:search": "tsx --env-file-if-exists=.env tools/probes/search-probe.ts"
+    "probe:search": "tsx --env-file-if-exists=.env tools/probes/search-probe.ts",
+    "dev:api": "npm run dev --workspace @prepkit/api"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

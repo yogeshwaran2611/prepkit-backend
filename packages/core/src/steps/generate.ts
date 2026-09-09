@@ -92,6 +92,26 @@ export function categoryApplies(
   return routed.length > 0;
 }
 
+/**
+ * When a category has no routed requirements but still applies, what may it see?
+ *
+ * NOT "everything" — that defeats the routing entirely. Found by test: system-design fell
+ * back to the full list and tagged a *mentoring* requirement to a system-design question,
+ * which is exactly the "one call with the same instructions" failure the brief warns about.
+ */
+function fallbackRequirements(category: QuestionCategory, all: Requirement[]): Requirement[] {
+  switch (category) {
+    case 'system-design':
+      // Design questions may only reference technical requirements.
+      return all.filter((r) => r.kind === 'technical');
+    case 'company-fit':
+      // Fit questions are about motivation and domain, so the whole list is legitimate.
+      return all;
+    default:
+      return [];
+  }
+}
+
 function questionCount(routed: Requirement[], category: QuestionCategory): number {
   const musts = routed.filter((r) => r.priority === 'must').length;
   if (category === 'company-fit') return 3;
@@ -218,12 +238,17 @@ export async function generateQuestions(
       deps.logger.info('category skipped', { category, reason: 'not applicable to this role/process' });
       continue;
     }
+    const visible = routed.length ? routed : fallbackRequirements(category, input.requirements);
+    if (!visible.length) {
+      deps.logger.info('category skipped', { category, reason: 'no requirements it may reference' });
+      continue;
+    }
     const produced = await generateQuestionsForCategory(
       {
         category,
         role: input.role,
         seniority: input.seniority,
-        requirements: routed.length ? routed : input.requirements,
+        requirements: visible,
         hiring: input.hiring,
         companyFacts: input.companyFacts,
         existingPrompts: questions.map((q) => q.prompt),
@@ -258,7 +283,12 @@ export async function generateQuestions(
 
     const byId = new Map(input.requirements.map((r) => [r.id, r]));
     const gapReqs = gaps.map((g) => byId.get(g.requirement_id)).filter((r): r is Requirement => !!r);
-    const category: QuestionCategory = gapReqs.some((r) => r.kind === 'behavioural') ? 'behavioural' : 'technical';
+    // The gap pass must stay INSIDE the requested scope. When regenerating one section,
+    // `categories` is restricted, and a gap question in another category would land outside
+    // the merge scope and silently appear in a section the user did not regenerate.
+    const allowed = new Set(categories);
+    const preferred: QuestionCategory = gapReqs.some((r) => r.kind === 'behavioural') ? 'behavioural' : 'technical';
+    const category: QuestionCategory = allowed.has(preferred) ? preferred : categories[0]!;
 
     const res = await deps.llm.complete({
       system: questionsPrompt.system(category),
@@ -282,10 +312,12 @@ export async function generateQuestions(
       const ids = [...new Set((raw.requirement_ids ?? []).filter((id) => validIds.has(id)))].slice(0, 3);
       if (!ids.length) continue;
       const req = byId.get(ids[0]!);
+      const wanted: QuestionCategory = req?.kind === 'behavioural' ? 'behavioural' : category;
       added.push({
         id: allocId(),
         requirement_ids: ids,
-        category: req?.kind === 'behavioural' ? 'behavioural' : category,
+        // Clamped to the allowed set for the same reason as above.
+        category: allowed.has(wanted) ? wanted : category,
         prompt: truncateAtSentence(raw.prompt.trim(), 600).text,
         answer_outline: truncateAtSentence((raw.answer_outline ?? '').trim(), 2_000).text,
         difficulty: clampDifficulty(raw.difficulty ?? 2),
@@ -300,9 +332,13 @@ export async function generateQuestions(
   const remaining = findCoverageGaps(input.requirements, questions).filter((g) => g.priority === 'must');
   if (remaining.length) {
     const byId = new Map(input.requirements.map((r) => [r.id, r]));
+    const allowedFinal = new Set(categories);
     for (const gap of remaining) {
       const req = byId.get(gap.requirement_id);
-      if (req) questions.push(fallbackQuestion(req, allocId()));
+      if (!req) continue;
+      const fq = fallbackQuestion(req, allocId());
+      // A scoped regeneration must not invent a question in another section either.
+      questions.push(allowedFinal.has(fq.category) ? fq : { ...fq, category: categories[0]! });
     }
     notes.push(note('FALLBACK_QUESTION_USED', { count: remaining.length, requirement_ids: remaining.map((g) => g.requirement_id) }));
   }

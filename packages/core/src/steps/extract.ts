@@ -19,7 +19,10 @@ import { applyPriorityHeuristics, findHeading } from './priority-heuristics.js';
  */
 
 export const MAX_JD_CHARS = 24_000;
-const THIN_JD_CHARS = 400;
+/** Below this, a description cannot carry a real role no matter what was extracted. */
+const VERY_SHORT_JD_CHARS = 200;
+/** Thinness is about what could be EXTRACTED, not raw length: a compact 380-char posting
+ *  that yields six real requirements is not a thin kit, and labelling it one is a lie. */
 const THIN_JD_REQUIREMENTS = 2;
 
 export interface RoleExtraction {
@@ -171,7 +174,8 @@ export async function extractRoleFromJd(jd: string, deps: Deps): Promise<RoleExt
   }
 
   // --- honest thinness ------------------------------------------------------
-  const thin = normalized.original.trim().length < THIN_JD_CHARS || requirements.length <= THIN_JD_REQUIREMENTS;
+  const thin =
+    requirements.length <= THIN_JD_REQUIREMENTS || normalized.original.trim().length < VERY_SHORT_JD_CHARS;
   if (thin) {
     notes.push(
       note('THIN_JD', {
