@@ -1,5 +1,8 @@
 node_modules/
 dist/
+# Stale build metadata in a clean clone makes `tsc -b` silently no-op while dist/ is absent,
+# which breaks the mandatory `npm run evaluate`. Never commit these.
+*.tsbuildinfo
 .next/
 .env
 .env.local
