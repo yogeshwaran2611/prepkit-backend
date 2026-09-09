@@ -95,7 +95,16 @@ function buildDeps(opts: { offline: boolean; verbose: boolean; caseId: string; q
       console.warn(`  [${opts.caseId}] provider retry ${attempt} in ${Math.round(waitMs)}ms: ${describe(error)}`),
   });
 
-  const allowPrivate = process.env.ALLOW_PRIVATE_URLS === 'true';
+  /**
+   * In offline mode EVERY fetch is a cache read — there is no network egress at all — so the
+   * SSRF port/address rules have nothing to protect and rejecting localhost:8099 would only
+   * break the fixtures. Offline therefore implies the flag.
+   *
+   * This mattered: without it, a clean clone with no .env rejected the Appendix B URL as
+   * BAD_PORT, which cascaded into an empty brief, a different question prompt, and a cache
+   * miss — so `--offline` only worked for someone who already had a .env.
+   */
+  const allowPrivate = process.env.ALLOW_PRIVATE_URLS === 'true' || opts.offline;
   const fetcher = new HttpFetcher({
     allowPrivate,
     maxPages: Number(process.env.FETCH_MAX_PAGES ?? 16),
