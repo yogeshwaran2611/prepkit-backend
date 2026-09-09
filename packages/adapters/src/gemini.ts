@@ -23,6 +23,12 @@ export interface GeminiOptions {
   queue?: RateLimitedQueue;
   /** 'low' keeps latency sane on thinking models. */
   thinking?: 'low' | 'high';
+  /**
+   * Offline mode: a cache miss is a LOUD error, never a silent live call. Without this the
+   * `--offline` promise is false — a miss reaches the network and fails with whatever the
+   * provider says about missing credentials, which explains nothing.
+   */
+  offline?: boolean;
   baseUrl?: string;
   timeoutMs?: number;
   onRetry?: (info: { attempt: number; waitMs: number; error: unknown }) => void;
@@ -77,6 +83,13 @@ export class GeminiProvider implements LlmProvider {
           ms: Date.now() - started,
         };
       }
+    }
+
+    if (this.opts.offline) {
+      throw new Error(
+        'offline mode: no cached model response for this step. The committed .cache/ is stale — ' +
+          'run `npm run seed:cache` with a GEMINI_API_KEY, or drop --offline.',
+      );
     }
 
     const estimated = estimateTokens((req.system ?? '') + req.user) + (req.maxTokens ?? 1_200);

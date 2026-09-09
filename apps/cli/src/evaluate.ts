@@ -15,6 +15,7 @@
  * `--offline` runs entirely from the committed .cache/ with no API key, so a reviewer can
  * see the pipeline work without credentials.
  */
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { BatchCase, type BatchOutput, type BatchResult, validateKit } from '@prepkit/schema';
@@ -89,6 +90,7 @@ function buildDeps(opts: { offline: boolean; verbose: boolean; caseId: string; q
     ...(process.env.GEMINI_MODEL ? { model: process.env.GEMINI_MODEL } : {}),
     cache,
     queue: opts.queue,
+    offline: opts.offline,
     onRetry: ({ attempt, waitMs, error }) =>
       console.warn(`  [${opts.caseId}] provider retry ${attempt} in ${Math.round(waitMs)}ms: ${describe(error)}`),
   });
@@ -223,7 +225,7 @@ async function main(): Promise<void> {
   };
   await Promise.all(Array.from({ length: Math.max(1, CONCURRENCY) }, worker));
 
-  await flush(outputPath, results, true);
+  await flush(outputPath, results);
 
   const ok = results.filter((r) => r.status === 'ok').length;
   const elapsed = (Date.now() - started) / 1000;
@@ -232,17 +234,29 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-async function flush(outputPath: string, kits: BatchResult[], final = false): Promise<void> {
-  const payload: BatchOutput = {
-    version: '1.0',
-    generated_at: new Date().toISOString(),
-    kits,
-  };
-  await mkdir(dirname(outputPath), { recursive: true });
-  const tmp = `${outputPath}.tmp`;
-  await writeFile(tmp, JSON.stringify(payload, null, 2), 'utf8');
-  await rename(tmp, outputPath);
-  void final;
+/**
+ * Incremental flush so an interrupted run still leaves a usable file.
+ *
+ * Serialised, with a per-write temp name: two workers finishing at once previously wrote the
+ * SAME `<output>.tmp`, and whichever renamed second failed with ENOENT — killing the run at
+ * the very end, after every case had already succeeded.
+ */
+let flushChain: Promise<void> = Promise.resolve();
+
+function flush(outputPath: string, kits: BatchResult[]): Promise<void> {
+  const snapshot = [...kits];
+  flushChain = flushChain.then(async () => {
+    const payload: BatchOutput = {
+      version: '1.0',
+      generated_at: new Date().toISOString(),
+      kits: snapshot,
+    };
+    await mkdir(dirname(outputPath), { recursive: true });
+    const tmp = `${outputPath}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`;
+    await writeFile(tmp, JSON.stringify(payload, null, 2), 'utf8');
+    await rename(tmp, outputPath);
+  });
+  return flushChain;
 }
 
 async function withTimeout<T>(p: Promise<T>, ms: number, id: string): Promise<T> {
