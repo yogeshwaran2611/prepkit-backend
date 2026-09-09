@@ -1,0 +1,27 @@
+{
+  "name": "prepkit",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc -b --pretty",
+    "test": "vitest run",
+    "evaluate": "tsx packages/core/cli/evaluate.ts",
+    "probe:extract": "tsx tools/probes/extract-probe.ts",
+    "probe:schema": "tsx tools/probes/response-schema-probe.ts",
+    "probe:cookie": "tsx tools/probes/cookie-probe.ts",
+    "probe:budget": "tsx tools/probes/rate-budget-probe.ts",
+    "probe:all": "npm run probe:schema && npm run probe:budget"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
