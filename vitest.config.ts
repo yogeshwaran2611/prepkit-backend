@@ -11,6 +11,7 @@ export default defineConfig({
       '@prepkit/schema': new URL('./packages/schema/src/index.ts', import.meta.url).pathname,
       '@prepkit/core': new URL('./packages/core/src/index.ts', import.meta.url).pathname,
       '@prepkit/adapters': new URL('./packages/adapters/src/index.ts', import.meta.url).pathname,
+      '@prepkit/db': new URL('./packages/db/src/index.ts', import.meta.url).pathname,
     },
   },
 });

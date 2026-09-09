@@ -16,6 +16,7 @@ export interface Config {
   fetchMaxPages: number;
   jobConcurrency: number;
   jobLeaseMs: number;
+  rateLimit: { authMax: number; generateMax: number; windowMs: number };
 }
 
 export interface CookieConfig {
@@ -71,6 +72,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     fetchMaxPages: Number(env.FETCH_MAX_PAGES ?? 16),
     jobConcurrency: Number(env.JOB_CONCURRENCY ?? 2),
     jobLeaseMs: Number(env.JOB_LEASE_MS ?? 5 * 60 * 1000),
+    // Configurable rather than hard-coded: the integration suite drives dozens of requests
+    // from one address, and weakening the production limit to accommodate tests would be
+    // the wrong trade. Production defaults stay tight.
+    rateLimit: {
+      windowMs: Number(env.RATE_LIMIT_WINDOW_MS ?? 60_000),
+      authMax: Number(env.RATE_LIMIT_AUTH_MAX ?? (nodeEnv === 'test' ? 1_000 : 10)),
+      generateMax: Number(env.RATE_LIMIT_GENERATE_MAX ?? (nodeEnv === 'test' ? 1_000 : 10)),
+    },
   };
 }
 

@@ -36,8 +36,8 @@ export function kitsRouter(config: Config, db: Db, runner: JobRunner): Router {
 
   /** Generation is the expensive path, so it gets its own limiter. */
   const generateLimit = rateLimit({
-    windowMs: 60_000,
-    max: 10,
+    windowMs: config.rateLimit.windowMs,
+    max: config.rateLimit.generateMax,
     key: (req) => (req as AuthedRequest).user?.id ?? req.ip ?? 'anon',
   });
 

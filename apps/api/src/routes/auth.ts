@@ -17,8 +17,8 @@ import {
 export function authRouter(config: Config, db: Db): Router {
   const router = Router();
 
-  // Credential endpoints are the ones worth limiting: 10 attempts per minute per IP.
-  const limit = rateLimit({ windowMs: 60_000, max: 10 });
+  // Credential endpoints are the ones worth limiting.
+  const limit = rateLimit({ windowMs: config.rateLimit.windowMs, max: config.rateLimit.authMax });
 
   router.post(
     '/register',
