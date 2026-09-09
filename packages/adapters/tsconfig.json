@@ -7,6 +7,14 @@
   "include": [
     "src/**/*.ts"
   ],
+  "references": [
+    {
+      "path": "../schema"
+    },
+    {
+      "path": "../core"
+    }
+  ],
   "exclude": [
     "**/*.test.ts"
   ]

@@ -11,12 +11,16 @@
   "scripts": {
     "typecheck": "tsc -b --pretty",
     "test": "vitest run",
-    "evaluate": "tsx packages/core/cli/evaluate.ts",
-    "probe:extract": "tsx tools/probes/extract-probe.ts",
-    "probe:schema": "tsx tools/probes/response-schema-probe.ts",
-    "probe:cookie": "tsx tools/probes/cookie-probe.ts",
-    "probe:budget": "tsx tools/probes/rate-budget-probe.ts",
-    "probe:all": "npm run probe:schema && npm run probe:budget"
+    "evaluate": "tsx --env-file-if-exists=.env apps/cli/src/evaluate.ts",
+    "probe:extract": "tsx --env-file=.env tools/probes/extract-probe.ts",
+    "probe:schema": "tsx --env-file=.env tools/probes/response-schema-probe.ts",
+    "probe:cookie": "tsx --env-file=.env tools/probes/cookie-probe.ts",
+    "probe:budget": "tsx --env-file=.env tools/probes/rate-budget-probe.ts",
+    "probe:all": "npm run probe:schema && npm run probe:budget",
+    "probe:models": "tsx --env-file=.env tools/probes/model-latency-probe.ts",
+    "sites": "tsx tools/local-site-server.ts",
+    "clean": "rm -rf packages/*/dist apps/*/dist && find . -name '*.tsbuildinfo' -not -path './node_modules/*' -delete",
+    "probe:search": "tsx --env-file-if-exists=.env tools/probes/search-probe.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
