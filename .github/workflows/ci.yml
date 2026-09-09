@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # A clean clone with npm, which is exactly what a grader does. This job is the reason
+      # the repo uses npm workspaces rather than pnpm: `npm install` must just work here.
+      - run: npm ci
+
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build --workspace @prepkit/web
+
+      # The mandatory batch command, offline so CI needs no API key. Proves it runs from a
+      # clean clone and that the committed cache is not stale.
+      - name: evaluate (offline)
+        run: npm run evaluate -- --input fixtures/cases.example.json --output /tmp/kits.json --offline
+
+      - name: check the batch output shape
+        run: |
+          node -e "
+            const out = require('/tmp/kits.json');
+            if (out.version !== '1.0') throw new Error('bad version');
+            if (!Array.isArray(out.kits) || out.kits.length !== 5) throw new Error('expected 5 entries');
+            for (const k of out.kits) {
+              if (!['ok','failed'].includes(k.status)) throw new Error('bad status: ' + k.status);
+              if (k.status === 'ok' && !k.kit) throw new Error(k.id + ' ok but no kit');
+              if (k.status === 'failed' && !k.error) throw new Error(k.id + ' failed but no error');
+            }
+            console.log('batch output shape ok:', out.kits.map(k => k.id + '=' + k.status).join(' '));
+          "

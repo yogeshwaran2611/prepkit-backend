@@ -23,7 +23,8 @@
     "probe:search": "tsx --env-file-if-exists=.env tools/probes/search-probe.ts",
     "dev:api": "npm run dev --workspace @prepkit/api",
     "dev:web": "npm run dev --workspace @prepkit/web",
-    "dev": "npm run sites & npm run dev:api & npm run dev:web"
+    "dev": "npm run sites & npm run dev:api & npm run dev:web",
+    "seed:cache": "npm run evaluate -- --input fixtures/cases.example.json --output /tmp/seed-kits.json"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
