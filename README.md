@@ -123,8 +123,17 @@ npm run evaluate -- --input fixtures/cases.example.json --output kits.json --off
 ```
 
 Offline mode reads only the committed `.cache/`, so the pipeline can be demonstrated with no
-credentials. A cache miss in offline mode is a loud `LLM_UNAVAILABLE` error — never a silent
-live call, and never a fabricated result.
+credentials — **and with no `.env` at all**, which is how CI runs it. A cache miss in offline
+mode is a loud error naming the actual problem (a stale cache), never a silent live call and
+never a fabricated result.
+
+Verified from a genuine clean clone:
+
+```
+$ git clone <repo> && cd prepkit && npm install
+$ npm run evaluate -- --input fixtures/cases.example.json --output kits.json --offline
+5/5 ok in 0.0s
+```
 
 ---
 
@@ -713,6 +722,22 @@ worse than reporting that there were few, and the brief says so explicitly.
   prompt work.
 - **`packages/db`'s Mongo path has no automated tests** — the integration suite runs against
   the file store. The repository interface is identical, but that is a gap I would close next.
+- **The committed cache is tied to the current prompts.** Changing a prompt changes its cache
+  key, so `--offline` would start missing. `npm run seed:cache` regenerates it, and CI fails
+  if it is stale rather than letting the demo break silently.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause and fix |
+| --- | --- |
+| `offline mode: no cached model response` | The committed cache is stale relative to the prompts. Run `npm run seed:cache` with a key, or drop `--offline` |
+| `GEMINI_API_KEY is not set` | Put a free key in `.env` (<https://aistudio.google.com/apikey>), or use `--offline` |
+| `refused to fetch …: BAD_PORT` | You are pointing at a non-standard port without `ALLOW_PRIVATE_URLS=true`. Correct in production; set the flag for local fixtures |
+| Web loads but every request is 401 | Cookie mode mismatch. If web and API are on different domains, set `COOKIE_MODE=cross-site` and add the web origin to `CORS_ORIGINS`. Diagnose with `npm run probe:cookie` |
+| Generation hangs then fails with 503 | The Gemini free tier is congested. The retry layer handles this; `npm run probe:models` shows current latency and reliability |
+| `NO_PUBLIC_DISCUSSION` on every kit | Keyless search engines are bot-blocking your IP. Set `BRAVE_API_KEY`, or accept the honest note |
 
 ---
 
