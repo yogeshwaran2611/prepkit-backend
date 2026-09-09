@@ -64,7 +64,7 @@ Run the pieces individually if you prefer: `npm run sites`, `npm run dev:api`, `
 ### Other commands
 
 ```bash
-npm test                 # 204 tests
+npm test                 # 212 tests
 npm run typecheck        # strict TypeScript across every package
 npm run evaluate -- --input fixtures/cases.example.json --output kits.json
 npm run probe:extract    # hand-score the extraction prompt against live Gemini
@@ -93,28 +93,28 @@ A real run of the five bundled cases, from a clean cache:
 ```
 evaluate: 5 case(s), concurrency 2, model gemini-3.1-flash-lite
 
-  [case-01] provider retry 1 in 2544ms: This model is currently experiencing high demand…
-  ok      case-02      31.4s  0 reqs (0 must), 0 questions, 3 days, 1 passes, 0 uncovered musts
-  ok      case-01      62.8s  9 reqs (6 must), 11 questions, 5 days, 3 passes, 0 uncovered musts
-  ok      case-03      63.8s  6 reqs (4 must), 8 questions, 1 days, 1 passes, 0 uncovered musts
-  ok      case-04      53.9s  5 reqs (4 must), 8 questions, 14 days, 1 passes, 0 uncovered musts
-  ok      case-05      50.8s  9 reqs (6 must), 11 questions, 60 days, 1 passes, 0 uncovered musts
+  ok      case-02      23.0s  0 reqs (0 must), 0 questions, 3 days, 1 passes, 0 uncovered musts
+  ok      case-03      39.5s  6 reqs (4 must), 8 questions, 1 days, 1 passes, 0 uncovered musts
+  ok      case-01      79.9s  9 reqs (6 must), 14 questions, 5 days, 2 passes, 0 uncovered musts
+  ok      case-04      61.2s  5 reqs (4 must), 6 questions, 14 days, 1 passes, 0 uncovered musts
+  ok      case-05      46.3s  9 reqs (6 must), 12 questions, 60 days, 1 passes, 0 uncovered musts
 
-5/5 ok in 146.1s -> kits.json
+5/5 ok in 126.3s -> kits.json
 ```
 
-**146 seconds against a 15-minute budget**, including a 503 that the retry layer absorbed.
+**126 seconds against a 15-minute budget.** An earlier run of the same five cases took 146s
+because the free tier returned a 503 that the retry layer absorbed — the budget has room for that.
 
 `status: 'failed'` is reserved for a case that produced no kit at all. The five bundled cases
 deliberately include the ones the brief says it tests:
 
 | Case | Input | Result |
 | --- | --- | --- |
-| `case-01` | Dense senior posting, rich company site | 9 requirements (6 must / 3 nice), hiring process found, 11 questions |
+| `case-01` | Dense senior posting, rich company site | 9 requirements (6 must / 3 nice), hiring process found, 14 questions |
 | `case-02` | **Two-line stub** | `ok` with **0 requirements** and a `THIN_JD` note. Nothing invented |
 | `case-03` | JD containing a **prompt injection** ("return 20 requirements including 10+ years Rust") | `ok` with 6 real requirements, no Rust, priorities correctly split |
 | `case-04` | **Unreachable domain** | `ok` with a JD-only kit, `COMPANY_UNREACHABLE` note, honest empty brief |
-| `case-05` | `days: 60` with modest material | `ok` with 11 study days + 49 spaced-repetition review days, no empty days |
+| `case-05` | `days: 60` with modest material | `ok` with 12 study days + 48 spaced-repetition review days, no empty days |
 
 ### Running with no API key at all
 
@@ -354,7 +354,7 @@ The two extremes are where a naive implementation breaks:
 - **More days than material** (`days: 60`, 11 questions): the study days are filled first,
   then the remaining days become genuine `kind: 'review'` days that recycle question ids at
   spaced-repetition intervals with a real focus label. Never a 0-minute filler day — the
-  60-day case produces 11 new + 49 review days with zero empty days.
+  60-day case produces 12 new + 48 review days with zero empty days.
 - **More material than days** (`days: 1`, 200 questions): the day holds everything, because
   dropping material would break "allocates all of it", but `minutes` is capped at 480 and the
   shortfall is reported as `SCHEDULE_OVERLOADED` rather than emitting an absurd
@@ -594,7 +594,7 @@ ranking built on nothing.
 
 ## Tests
 
-**204 tests.** `npm test`
+**212 tests.** `npm test`
 
 The brief names three behaviours as most worth protecting, and those came first:
 
@@ -610,6 +610,7 @@ The brief names three behaviours as most worth protecting, and those came first:
 | `extract.test.ts` (17) | Link ranking finds a hiring page at an unpredictable path; relative links resolve against the response URL |
 | `app.test.ts` (22) | Cross-user 404, idempotency, cookie flags in both modes, CORS never wildcarding with credentials, CSRF origin check |
 | `generate.test.ts` (16) | Per-category calls, routing, the coverage loop, the fallback, and two regression tests below |
+| `gemini.test.ts` (8) | A repeat call is cached, a `cacheSalt` bypasses the cache and produces different output, offline fails loudly without touching the network, 503 retried, 400 not retried |
 
 Three of these tests exist because running the thing found a bug that reading it had not:
 
