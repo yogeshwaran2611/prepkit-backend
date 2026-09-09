@@ -11,7 +11,7 @@
   "scripts": {
     "typecheck": "tsc -b --pretty",
     "test": "vitest run",
-    "evaluate": "tsx --env-file-if-exists=.env apps/cli/src/evaluate.ts",
+    "evaluate": "npm run build:packages --silent && tsx --env-file-if-exists=.env apps/cli/src/evaluate.ts",
     "probe:extract": "tsx --env-file=.env tools/probes/extract-probe.ts",
     "probe:schema": "tsx --env-file=.env tools/probes/response-schema-probe.ts",
     "probe:cookie": "tsx --env-file-if-exists=.env tools/probes/cookie-probe.ts",
@@ -24,7 +24,10 @@
     "dev:api": "npm run dev --workspace @prepkit/api",
     "dev:web": "npm run dev --workspace @prepkit/web",
     "dev": "npm run sites & npm run dev:api & npm run dev:web",
-    "seed:cache": "npm run evaluate -- --input fixtures/cases.example.json --output /tmp/seed-kits.json"
+    "seed:cache": "npm run evaluate -- --input fixtures/cases.example.json --output /tmp/seed-kits.json",
+    "build:packages": "tsc -b",
+    "prepare": "npm run build:packages",
+    "build": "npm run build:packages && npm run build --workspace @prepkit/web"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
