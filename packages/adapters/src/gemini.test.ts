@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { MemoryCache } from '@prepkit/core';
 import { GeminiProvider } from './gemini.js';
 
@@ -7,6 +7,22 @@ import { GeminiProvider } from './gemini.js';
  * most-demoed feature: a prompt-keyed cache would return byte-identical questions on a
  * regeneration, making the button look like a no-op.
  */
+
+/**
+ * The real global fetch is restored after every test. Leaving a stub installed is a
+ * cross-test hazard: any other file (or a later test here) that reaches the network would
+ * silently talk to the stub instead, which is the kind of flake that wastes an afternoon.
+ */
+const realFetch = globalThis.fetch;
+beforeAll(() => {
+  // nothing to set up; the reference above is what matters
+});
+afterEach(() => {
+  globalThis.fetch = realFetch;
+});
+afterAll(() => {
+  globalThis.fetch = realFetch;
+});
 
 let calls = 0;
 const server = (body: unknown, status = 200) => ({
