@@ -21,7 +21,6 @@ jobs:
 
       - run: npm run typecheck
       - run: npm test
-      - run: npm run build --workspace @prepkit/web
 
       # The mandatory batch command, offline so CI needs no API key. Proves it runs from a
       # clean clone and that the committed cache is not stale.

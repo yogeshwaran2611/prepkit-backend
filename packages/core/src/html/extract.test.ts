@@ -117,3 +117,55 @@ describe('resolveCompanyName — owner of the required source.company field', ()
     expect(resolveCompanyName({ url: 'not a url' })).toBeTruthy();
   });
 });
+
+describe('CAREERS pattern — real-world false positives found via live testing', () => {
+  it('does not treat a "ci-jobs" URL SLUG as a hiring signal when the anchor text is unrelated', () => {
+    // The real case, from GitLab's own handbook: the compound word lives in the URL path,
+    // not the clickable text a person actually reads.
+    const base = 'https://acme.test/';
+    const link = (href: string, text: string) => ({ href, text, inNav: false });
+    const ranked = rankLinks(
+      [link(`${base}handbook/enterprise-data/platform/ci-jobs/`, 'CI/CD pipeline reference'), link(`${base}careers/`, 'Careers')],
+      base,
+    );
+    expect(ranked[0]!.url).toContain('careers');
+    // Note: "handbook" (a separate, PROCESS-pattern signal — many companies do host their
+    // hiring process under a literal /handbook/ path) can still flag this true; that is a
+    // different, inherent ambiguity unrelated to the jobs-slug fix this test targets. What
+    // matters here is that the compound "jobs" slug no longer inflates its CAREERS score.
+    const ciJobs = ranked.find((r) => r.url.includes('ci-jobs'))!;
+    const careers = ranked.find((r) => r.url.endsWith('/careers/'))!;
+    expect(ciJobs.score).toBeLessThan(careers.score);
+  });
+
+  it('DOES treat "Jobs" as a hiring signal when it is genuinely the anchor text', () => {
+    const base = 'https://acme.test/';
+    const link = (href: string, text: string) => ({ href, text, inNav: false });
+    const ranked = rankLinks([link(`${base}opportunities/`, 'Open Jobs')], base);
+    expect(ranked[0]!.score).toBeGreaterThan(0);
+  });
+
+  it('still treats a standalone "/jobs/" page as a hiring signal', () => {
+    const base = 'https://acme.test/';
+    const link = (href: string, text: string) => ({ href, text, inNav: false });
+    const ranked = rankLinks([link(`${base}jobs/`, 'Open jobs')], base);
+    expect(ranked[0]!.score).toBeGreaterThan(0);
+  });
+});
+
+describe('job-posting ids — real-world false positives found via live testing', () => {
+  it('scores an individual job posting (opaque id) far below a careers hub page', () => {
+    const base = 'https://acme.test/';
+    const link = (href: string, text: string) => ({ href, text, inNav: false });
+    const ranked = rankLinks(
+      [
+        link(`${base}careers/`, 'Careers'),
+        link(`${base}careers/fb4b6076-b943-4d95-bb9b-a66aef8275f2`, 'Senior Engineer'),
+      ],
+      base,
+    );
+    const hub = ranked.find((r) => r.url === `${base}careers/`)!;
+    const posting = ranked.find((r) => r.url.includes('fb4b6076'))!;
+    expect(hub.score).toBeGreaterThan(posting.score);
+  });
+});

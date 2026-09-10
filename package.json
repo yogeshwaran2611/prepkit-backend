@@ -1,5 +1,5 @@
 {
-  "name": "prepkit",
+  "name": "prepkit-backend",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -22,12 +22,11 @@
     "clean": "rm -rf packages/*/dist apps/*/dist && find . -name '*.tsbuildinfo' -not -path './node_modules/*' -delete",
     "probe:search": "tsx --env-file-if-exists=.env tools/probes/search-probe.ts",
     "dev:api": "npm run dev --workspace @prepkit/api",
-    "dev:web": "npm run dev --workspace @prepkit/web",
-    "dev": "npm run sites & npm run dev:api & npm run dev:web",
+    "dev": "npm run sites & npm run dev:api",
     "seed:cache": "npm run evaluate -- --input fixtures/cases.example.json --output /tmp/seed-kits.json",
     "build:packages": "tsc -b",
     "prepare": "npm run build:packages",
-    "build": "npm run build:packages && npm run build --workspace @prepkit/web"
+    "build": "npm run build:packages"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

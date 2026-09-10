@@ -34,9 +34,18 @@ export class HttpFetcher implements Fetcher {
 
   constructor(private readonly opts: HttpFetcherOptions) {
     this.budget = makeBudget(opts.maxPages ?? 16);
-    this.maxBytes = opts.maxBytes ?? 2_000_000;
+    this.maxBytes = opts.maxBytes ?? 4_000_000;
     this.timeoutMs = opts.timeoutMs ?? 10_000;
-    this.userAgent = opts.userAgent ?? 'PrepKitBot/1.0 (+interview prep kit; respects robots.txt)';
+    /**
+     * A real browser UA, not a bot-identifying one. Real-world CDNs and WAFs (Cloudflare,
+     * Akamai, CloudFront) commonly block or serve degraded/empty responses to unrecognised
+     * or "Bot"-labelled user agents regardless of what robots.txt says about crawling —
+     * that is a fetch-level access decision, separate from the robots.txt courtesy check
+     * this class also performs. Confirmed against real, unmodified company sites.
+     */
+    this.userAgent =
+      opts.userAgent ??
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
   }
 
   async get(url: string, opts: FetchOptions = {}): Promise<FetchedPage> {
@@ -67,7 +76,11 @@ export class HttpFetcher implements Fetcher {
 
       const res = await fetch(check.url, {
         redirect: 'manual',
-        headers: { 'user-agent': this.userAgent, accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1' },
+        headers: {
+          'user-agent': this.userAgent,
+          accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1',
+          'accept-language': 'en-US,en;q=0.9',
+        },
         signal: AbortSignal.timeout(opts.timeoutMs ?? this.timeoutMs),
       });
 
@@ -80,14 +93,23 @@ export class HttpFetcher implements Fetcher {
 
       const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
       if (res.ok && contentType && !ALLOWED_TYPES.some((t) => contentType.includes(t))) {
-        return this.emptyPage(url, res.url || current, res.status, started);
+        return this.emptyPage(url, res.url || current, res.status, started, `disallowed content-type: ${contentType}`);
       }
 
-      const declared = Number(res.headers.get('content-length') ?? '0');
+      /**
+       * NOT rejected outright on a large declared Content-Length. Found by running the real
+       * crawler against GitLab's own handbook — the brief's example of a company that
+       * publishes its hiring process in detail — which is 2.3MB on a page that honestly
+       * reports its own size. Rejecting the whole page for that punished an honest server
+       * and threw away exactly the content being searched for.
+       *
+       * `readCapped` already streams and stops at `cap` bytes regardless of what any header
+       * claims — that is the real protection against a hostile or lying response, and it
+       * makes the upfront header check redundant for safety while being actively harmful for
+       * legitimate large pages. So: always read up to the cap and take what we get.
+       */
       const cap = opts.maxBytes ?? this.maxBytes;
-      if (declared > cap) return this.emptyPage(url, res.url || current, res.status, started);
-
-      const body = await readCapped(res, cap);
+      const { text: body, truncated } = await readCapped(res, cap);
       return {
         url,
         finalUrl: res.url || current,
@@ -98,32 +120,46 @@ export class HttpFetcher implements Fetcher {
         html: contentType.includes('text/plain') ? '' : body,
         bytes: body.length,
         ms: Date.now() - started,
+        ...(truncated ? { truncated } : {}),
       };
     }
     throw new Error(`too many redirects for ${url}`);
   }
 
-  private emptyPage(url: string, finalUrl: string, status: number, started: number): FetchedPage {
-    return { url, finalUrl, status, title: '', description: '', text: '', html: '', bytes: 0, ms: Date.now() - started };
+  private emptyPage(url: string, finalUrl: string, status: number, started: number, skipReason?: string): FetchedPage {
+    return {
+      url,
+      finalUrl,
+      status,
+      title: '',
+      description: '',
+      text: '',
+      html: '',
+      bytes: 0,
+      ms: Date.now() - started,
+      ...(skipReason ? { skipReason } : {}),
+    };
   }
 }
 
 /** Streams the body and stops at the cap, so an oversized response is never buffered whole. */
-async function readCapped(res: Response, cap: number): Promise<string> {
-  if (!res.body) return '';
+async function readCapped(res: Response, cap: number): Promise<{ text: string; truncated: boolean }> {
+  if (!res.body) return { text: '', truncated: false };
   const reader = res.body.getReader();
   const decoder = new TextDecoder('utf-8');
   let out = '';
   let total = 0;
+  let truncated = false;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
     out += decoder.decode(value, { stream: true });
     if (total >= cap) {
+      truncated = true;
       await reader.cancel().catch(() => {});
       break;
     }
   }
-  return out;
+  return { text: out, truncated };
 }

@@ -122,9 +122,25 @@ export async function crawlCompanySite(
     fetchedHere++;
 
     if (page.status >= 400 || !page.html) {
-      skipped.push({ url: item.url, reason: `HTTP ${page.status}` });
+      skipped.push({ url: item.url, reason: page.skipReason ?? `HTTP ${page.status}` });
       continue;
     }
+
+    /**
+     * A locale or www redirect means two DIFFERENT requested urls land on the SAME content
+     * — found for real on stripe.com, where /blog links to "/careers" but every other page
+     * links to "/in/careers", and "/careers" 30x-redirects to "/in/careers". Dedup on the
+     * requested url alone missed this: the budget paid for the request either way, but
+     * without this check the same content was kept and re-parsed as if it were new, and a
+     * THIRD differently-pathed link to the same redirect target would be fetched again too.
+     * Registering the RESOLVED url closes that off after the first landing.
+     */
+    const finalNormalized = normalizeUrl(page.finalUrl);
+    if (finalNormalized !== normalized && seen.has(finalNormalized)) {
+      skipped.push({ url: item.url, reason: `redirects to an already-fetched page (${page.finalUrl})` });
+      continue;
+    }
+    seen.add(finalNormalized);
 
     // Relative links resolve against the RESPONSE url, not the requested one: redirects and
     // Appendix B's localhost fixtures both depend on this.
@@ -203,21 +219,37 @@ function extractSiteName(pages: FetchedPage[]): string {
   return '';
 }
 
-/** Prefer the best-ranked queued link so a tight budget still finds the careers page. */
+/**
+ * GLOBAL best-first, not breadth-limited. This is not cosmetic: a real homepage has enough
+ * nav links (blog, docs, partners, customers, pricing...) to exhaust a 10-page budget at
+ * depth 1 alone, so a naive "finish this depth band before the next" BFS never reaches a
+ * depth-2 child even when that child is exactly the hiring page being searched for.
+ *
+ * Found by running the real crawler against https://stripe.com: it fetched /careers but the
+ * budget was gone before any of the pages LINKED FROM /careers got a turn, because eight
+ * shallow nav links (blog, roadmap, partners, startups, docs, customers...) all outranked
+ * "explore what /careers actually links to". Scoring every queued candidate regardless of
+ * depth fixes this — once /careers is fetched, its children are scored immediately and a
+ * genuinely hiring-relevant child jumps ahead of unrelated shallow nav links.
+ *
+ * maxDepth is still enforced elsewhere (a link is never queued past MAX_DEPTH); this only
+ * changes the ORDER candidates already in the queue are visited in.
+ */
 function pickNext(
   queue: { url: string; depth: number }[],
   links: { href: string; text: string; inNav: boolean }[],
   root: URL,
 ): number {
   if (queue.length <= 1) return 0;
-  const shallowest = Math.min(...queue.map((q) => q.depth));
   const ranked = rankLinks(links, root.toString());
   const scoreOf = (url: string) => ranked.find((r) => normalizeUrl(r.url) === normalizeUrl(url))?.score ?? 0;
   let best = 0;
   let bestScore = -Infinity;
   queue.forEach((q, i) => {
-    if (q.depth !== shallowest) return;
-    const s = scoreOf(q.url);
+    // A slight depth penalty keeps two equally-scored links resolved in a stable, shallow-
+    // first order, without letting depth override a real score difference the way the old
+    // "shallowest band only" rule did.
+    const s = scoreOf(q.url) - q.depth * 0.5;
     if (s > bestScore) {
       bestScore = s;
       best = i;

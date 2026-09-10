@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { KitNote } from '@prepkit/schema';
 import type { Deps, FetchedPage, SearchHit } from '../ports.js';
 import { note } from '../notes.js';
+import { extractPage } from '../html/extract.js';
 import { briefPrompt, briefSchema, hiringPrompt, hiringSchema } from '../prompts/index.js';
 import { parseJson } from '../resilience/json.js';
 import { clampText } from '../security/sanitize.js';
@@ -10,7 +11,7 @@ import type { SiteCrawl } from './crawl.js';
 
 /** S3, S4, S5 — PLAN.md §4.3. Each degrades to an honest empty result plus a note. */
 
-export const HIRING_PAGE_RESERVATION = 3;
+export const HIRING_PAGE_RESERVATION = 5;
 export const SEARCH_PAGE_RESERVATION = 3;
 
 // ---------------------------------------------------------------------------
@@ -61,7 +62,18 @@ export async function findHiringProcess(crawl: SiteCrawl, deps: Deps): Promise<H
     if (!deps.fetcher.budget.take()) break;
     try {
       const page = await deps.fetcher.get(cand.url);
-      if (page.status < 400 && page.text.length > 100) extra.push(page);
+      if (page.status >= 400 || !page.html) continue;
+      /**
+       * BUG FOUND BY RUNNING THIS AGAINST REAL SITES, not fixture data: the raw fetcher only
+       * populates `.text` for a `text/plain` response — for HTML (i.e. every real page) it
+       * is always empty, and `.html` holds the raw markup instead. This loop was checking
+       * `page.text.length > 100` on that empty string, so it silently discarded every
+       * candidate it fetched here regardless of content. The main crawl step never had this
+       * problem because it runs `extractPage()` on what it fetches; this path fetches fresh
+       * candidates directly and has to do the same extraction itself.
+       */
+      const extracted = extractPage(page.html, page.finalUrl);
+      if (extracted.text.length > 100) extra.push({ ...page, title: extracted.title || page.title, text: extracted.text, html: '' });
     } catch {
       // A single unreachable candidate is not a failure; try the next one.
     }

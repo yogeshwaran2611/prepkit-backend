@@ -1,9 +1,9 @@
-# The AI Interview Prep Kit
+# Prep Kit — backend
 
-Turns a pasted job description plus a company website into a researched, editable interview
-preparation kit: a company brief, a role breakdown with requirement ids, a categorised
-question bank, flashcards, and a day-by-day study schedule you can reshape and practise
-against.
+The API and pipeline for the AI Interview Prep Kit: turns a pasted job description plus a
+company website into a researched, editable interview preparation kit. This repo is the
+backend only — see [prepkit-frontend](../prepkit-frontend) for the Next.js UI that talks to
+it over HTTP with a credentialed cookie.
 
 Built for the Trao Full-Stack Engineering Assessment (`FS-AI-INTERVIEW-01`).
 
@@ -37,18 +37,23 @@ Built for the Trao Full-Stack Engineering Assessment (`FS-AI-INTERVIEW-01`).
 Requires **Node 22+** and npm. No other services need to be installed.
 
 ```bash
-git clone <this repo> prepkit && cd prepkit
+git clone <this repo> prepkit-backend && cd prepkit-backend
 npm install
 
 cp .env.example .env
 # Put a free Gemini key in .env (no credit card): https://aistudio.google.com/apikey
 #   GEMINI_API_KEY=...
+# Point MONGODB_URI at your Atlas cluster, or leave it unset to use a local JSON file store.
 
-npm run dev          # fixture sites :8099, API :4000, web :3000
+npm run dev          # fixture sites :8099, API :4000
 ```
 
-Open <http://localhost:3000>, create an account, and paste a job description. For the
-company URL you can use the bundled fixture sites, which need no internet access:
+The frontend is a separate repo ([prepkit-frontend](../prepkit-frontend)) run alongside this
+on :3000; set its `NEXT_PUBLIC_API_URL` to this API's address, and set this repo's
+`CORS_ORIGINS` to the frontend's origin. `GET /api/health` reports which store and model are
+live without leaking either.
+
+For the company URL, the bundled fixture sites need no internet access:
 
 | URL | What it exercises |
 | --- | --- |
@@ -59,7 +64,7 @@ company URL you can use the bundled fixture sites, which need no internet access
 `.env.example` sets `ALLOW_PRIVATE_URLS=true`, which is what permits `localhost:8099`.
 It must stay unset in production — see [Security](#security).
 
-Run the pieces individually if you prefer: `npm run sites`, `npm run dev:api`, `npm run dev:web`.
+Run the pieces individually if you prefer: `npm run sites`, `npm run dev:api`. The frontend (`npm run dev` in prepkit-frontend) is a separate process on :3000.
 
 ### Other commands
 
@@ -144,7 +149,7 @@ The preferred stack, with three deviations I explain below.
 | Layer | Choice |
 | --- | --- |
 | Language | TypeScript, `strict` + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes` |
-| Frontend | Next.js 15 (App Router), React 19, Tailwind CSS |
+| Frontend | Next.js 15 — separate repo, [prepkit-frontend](../prepkit-frontend) |
 | Backend | Node 22, Express 5 |
 | Database | MongoDB (official driver) — with a JSON-file store for local development |
 | Validation | Zod (one schema → TS types → runtime validation) |
@@ -169,6 +174,11 @@ The preferred stack, with three deviations I explain below.
    `pnpm-workspace.yaml` or the `workspace:*` protocol — the CLI would die on its first
    cross-package import. A grader typing `npm install && npm run evaluate` must not see a
    stack trace.
+4. **Backend and frontend as separate repositories, each independently deployable and
+   clonable.** The frontend has no dependency on this repo beyond an HTTP call and five
+   vendored TypeScript interfaces (`src/lib/kit-types.ts` there) — there is no build-time
+   coupling, no shared workspace, and no version to keep in lockstep beyond the wire shape
+   in Appendix A, which is frozen anyway.
 
 Everything is OSI-licensed and on a free tier.
 
@@ -178,9 +188,9 @@ Everything is OSI-licensed and on a free tier.
 
 ```
 apps/
-  web/     Next.js — pages, design system, builder, practice, weak spots
   api/     Express — HTTP, auth, job runner, SSE
   cli/     the mandatory `evaluate` batch command
+# The Next.js UI (apps/web in the original design) is now its own repo: prepkit-frontend.
 packages/
   schema/  Appendix A + integrity rules + wire types (zod). No runtime deps but zod.
   core/    the pipeline and the whole domain. Pure TypeScript.

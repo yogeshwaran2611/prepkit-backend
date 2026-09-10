@@ -37,6 +37,12 @@ export interface FetchedPage {
   html: string;
   bytes: number;
   ms: number;
+  /** Set when the fetcher intentionally returned no content (e.g. disallowed content type),
+   *  so the caller can report WHY rather than a misleading "HTTP 200" with empty html. */
+  skipReason?: string;
+  /** True when the body was cut off at the byte cap rather than ending naturally. A large
+   *  but legitimate page (a company handbook, say) still yields a useful partial read. */
+  truncated?: boolean;
 }
 
 export interface FetchOptions {
