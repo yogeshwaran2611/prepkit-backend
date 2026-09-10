@@ -186,31 +186,51 @@ Everything is OSI-licensed and on a free tier.
 
 ## High-level architecture
 
+A single Express app, in a conventional MVC-shaped layout rather than an internal
+multi-package workspace:
+
 ```
-apps/
-  api/     Express — HTTP, auth, job runner, SSE
-  cli/     the mandatory `evaluate` batch command
-# The Next.js UI (apps/web in the original design) is now its own repo: prepkit-frontend.
-packages/
-  schema/  Appendix A + integrity rules + wire types (zod). No runtime deps but zod.
-  core/    the pipeline and the whole domain. Pure TypeScript.
-  adapters/Gemini, HTTP fetcher, search providers, file cache.
-  db/      Mongo + JSON-file repositories behind one interface.
+src/
+  routes/        endpoint definitions ONLY — verb + path + middleware wired to a controller
+    auth.routes.ts, kits.routes.ts, jobs.routes.ts
+  controllers/   all main request logic — one factory per resource, injected with services
+    auth.controller.ts, kits.controller.ts, jobs.controller.ts
+  services/      Mongo (and, for local dev, JSON-file) queries, plus the job orchestrator
+    db/          repositories: users, kits, jobs, practice — one interface, two backends
+    jobRunner.service.ts
+  utils/         reusable functional logic — no Express, no req/res, independently testable
+    pipeline/    the whole research+generation pipeline: extract, crawl, research, generate,
+                 coverage, schedule, merge, srs, weak-spots, security, resilience
+    providers/   Gemini, the HTTP fetcher, search providers, the file-backed cache
+  schemas/       Appendix A + integrity rules + wire types (zod)
+  middleware/    auth, error handling, validation, rate limiting
+  config/        the ONLY place environment variables are read
+  app.ts, server.ts
+cli/
+  evaluate.ts    the mandatory batch entry point — imports src/ directly, no separate package
 ```
 
-**The dependency rule:** `schema ← core ← db/adapters ← api/cli ← web`. Arrows never reverse.
-`core` may not import Express, Next, Mongo, or anything from `apps/*`; all I/O reaches it as
-injected ports (`LlmProvider`, `Fetcher`, `SearchProvider`, `Clock`, `Logger`, `ProgressSink`).
+**The dependency rule, same idea as before, flatter shape:** `schemas ← utils ← services ←
+controllers ← routes`. `utils/pipeline` may not import Express, Mongo, or anything under
+`controllers/`/`routes/`; all I/O reaches it as injected ports (`LlmProvider`, `Fetcher`,
+`SearchProvider`, `Clock`, `Logger`, `ProgressSink`) — so the entire pipeline is testable with
+zero HTTP server and zero database running, which is exactly what `utils/pipeline/*.test.ts`
+does in 200+ of this repo's tests.
 
-This is not decorative. When I first wrote the `evaluate` CLI inside `packages/core`, it
-needed the Gemini adapter — `tsc` immediately failed with a project-reference cycle, and the
-fix was to move the CLI to `apps/cli` where an edge belongs. The layering caught the mistake
-the moment it was made.
+This was originally five separate npm-workspace packages (`schema`, `core`, `adapters`, `db`
++ two apps). Consolidated into one flat app because a workspace's main benefit — independent
+publishing/versioning — buys nothing here: this is one deployable, cloned as one repo, with
+one `package.json`. The layer boundaries that mattered (pipeline never touches Express or
+Mongo directly) are preserved by directory convention and code review discipline instead of
+by a package boundary `tsc` enforces; what's gained is a structure that matches how the brief
+itself is organised (controller = business logic, routes = endpoints, services = persistence,
+utils = reusable logic) and one less thing to explain in a walkthrough.
 
-Separated concerns, as the brief asks: **retrieval** (`core/steps/crawl.ts`,
-`core/steps/research.ts`), **extraction** (`core/steps/extract.ts`), **generation**
-(`core/steps/generate.ts`), **scheduling** (`core/schedule.ts`), **persistence**
-(`packages/db`) — and none of them knows about HTTP.
+Separated concerns, as the brief asks: **retrieval** (`utils/pipeline/steps/crawl.ts`,
+`utils/pipeline/steps/research.ts`), **extraction** (`utils/pipeline/steps/extract.ts`),
+**generation** (`utils/pipeline/steps/generate.ts`), **scheduling**
+(`utils/pipeline/schedule.ts`), **persistence** (`services/db/`) — and none of them knows
+about HTTP.
 
 ---
 
@@ -655,7 +675,7 @@ Full list with inline documentation in [`.env.example`](.env.example). The ones 
 | `FETCH_MAX_PAGES` | Whole-run page budget shared by all fetching steps (default 16) |
 | `BRAVE_API_KEY` | Optional. Makes public-discussion search reliable; without it the pipeline degrades honestly |
 
-Secrets are read only in `apps/api/src/config.ts` and the CLI, never deeper in the app, so a
+Secrets are read only in `src/config/index.ts` and the CLI, never deeper in the app, so a
 deployed configuration is auditable in one file. `.env` is gitignored; `.env.example` carries
 no values.
 
@@ -731,7 +751,7 @@ worse than reporting that there were few, and the brief says so explicitly.
 - **The extraction prompt is tuned against a handful of postings.** `npm run probe:extract`
   exists to hand-score it against new ones; a posting written very differently may need
   prompt work.
-- **`packages/db`'s Mongo path has no automated tests** — the integration suite runs against
+- **`services/db`'s Mongo path has no automated tests** — the integration suite runs against
   the file store. The repository interface is identical, but that is a gap I would close next.
 - **The committed cache is tied to the current prompts.** Changing a prompt changes its cache
   key, so `--offline` would start missing. `npm run seed:cache` regenerates it, and CI fails

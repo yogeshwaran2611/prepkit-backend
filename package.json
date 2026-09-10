@@ -1,35 +1,48 @@
 {
   "name": "prepkit-backend",
+  "version": "0.0.0",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "typecheck": "tsc -b --pretty",
+    "dev": "npm run sites & npm run dev:api",
+    "dev:api": "tsx watch --env-file-if-exists=.env src/server.ts",
+    "sites": "tsx tools/local-site-server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "evaluate": "npm run build:packages --silent && tsx --env-file-if-exists=.env apps/cli/src/evaluate.ts",
+    "clean": "rm -rf dist && find . -name '*.tsbuildinfo' -not -path './node_modules/*' -delete",
+    "evaluate": "tsx --env-file-if-exists=.env cli/evaluate.ts",
+    "seed:cache": "npm run evaluate -- --input fixtures/cases.example.json --output /tmp/seed-kits.json",
     "probe:extract": "tsx --env-file=.env tools/probes/extract-probe.ts",
     "probe:schema": "tsx --env-file=.env tools/probes/response-schema-probe.ts",
-    "probe:cookie": "tsx --env-file-if-exists=.env tools/probes/cookie-probe.ts",
     "probe:budget": "tsx --env-file=.env tools/probes/rate-budget-probe.ts",
-    "probe:all": "npm run probe:schema && npm run probe:budget",
     "probe:models": "tsx --env-file=.env tools/probes/model-latency-probe.ts",
-    "sites": "tsx tools/local-site-server.ts",
-    "clean": "rm -rf packages/*/dist apps/*/dist && find . -name '*.tsbuildinfo' -not -path './node_modules/*' -delete",
     "probe:search": "tsx --env-file-if-exists=.env tools/probes/search-probe.ts",
-    "dev:api": "npm run dev --workspace @prepkit/api",
-    "dev": "npm run sites & npm run dev:api",
-    "seed:cache": "npm run evaluate -- --input fixtures/cases.example.json --output /tmp/seed-kits.json",
-    "build:packages": "tsc -b",
-    "prepare": "npm run build:packages",
-    "build": "npm run build:packages"
+    "probe:cookie": "tsx --env-file-if-exists=.env tools/probes/cookie-probe.ts",
+    "probe:all": "npm run probe:schema && npm run probe:budget"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
+    "cheerio": "^1.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "jose": "^5.9.6",
+    "mongodb": "^6.12.0",
+    "robots-parser": "^3.0.1",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.8",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
     "@types/node": "^22.10.2",
+    "@types/supertest": "^6.0.2",
+    "supertest": "^7.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

@@ -1,23 +1,19 @@
 {
-  "files": [],
-  "references": [
-    {
-      "path": "packages/schema"
-    },
-    {
-      "path": "packages/core"
-    },
-    {
-      "path": "packages/adapters"
-    },
-    {
-      "path": "packages/db"
-    },
-    {
-      "path": "apps/cli"
-    },
-    {
-      "path": "apps/api"
-    }
-  ]
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "declaration": false,
+    "outDir": "dist",
+    "rootDir": ".",
+    "types": ["node"],
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "cli/**/*.ts"],
+  "exclude": ["**/*.test.ts", "node_modules", "dist"]
 }

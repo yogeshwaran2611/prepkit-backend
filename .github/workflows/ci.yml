@@ -15,8 +15,8 @@ jobs:
           node-version: 22
           cache: npm
 
-      # A clean clone with npm, which is exactly what a grader does. This job is the reason
-      # the repo uses npm workspaces rather than pnpm: `npm install` must just work here.
+      # A clean clone with npm, which is exactly what a grader does. Plain npm (not pnpm) is the reason
+      # this works from a clean clone: `npm install` alone must succeed here, no workspace linking.
       - run: npm ci
 
       - run: npm run typecheck
