@@ -254,6 +254,39 @@ the URL slug agree. Then it fetches the best candidates. On the bundled fixture 
 3 for hiring candidates, 3 for search results). A per-step cap is not a cap — three steps
 fetching twelve pages each is thirty-six pages.
 
+**This was tested against real, unmodified company sites, not only fixtures** — a fixture
+proves the plumbing works, not that the crawler survives the open web. Running it live against
+`stripe.com`, `about.gitlab.com` and `linear.app` surfaced five real bugs no fixture would have:
+
+1. A bot-identifying User-Agent gets degraded or blocked by real CDNs/WAFs regardless of
+   robots.txt — switched to a real browser UA.
+2. Breadth-first search exhausted the whole page budget on shallow nav links (blog, docs,
+   partners…) before ever trying a link discovered from a promising page — rewritten to
+   genuine best-first search, scoring every queued candidate globally rather than only within
+   "the current depth band".
+3. **Redirect aliasing**: `stripe.com/blog` links to `/careers`, every other page links to
+   `/in/careers`, and `/careers` 302s to `/in/careers` — two different requested URLs landing
+   on one page, fetched (and budgeted) twice. Dedup now keys on the *resolved* URL, not just
+   the requested one.
+4. An oversized-page guard discarded GitLab's own hiring handbook outright because it honestly
+   reports its real size (2.3MB against a 2MB cap) — punishing an honest server. The streaming
+   byte cap already truncates safely regardless of any header; removed the redundant upfront
+   rejection so a large legitimate page yields a useful partial read instead of nothing.
+5. **The one that mattered most**: `findHiringProcess` read `.text` on freshly-fetched
+   candidate pages, but the raw fetcher only populates `.text` for `text/plain` responses — for
+   real HTML (i.e. every real page) it is always empty. Every candidate this step ever fetched
+   was silently discarded regardless of content, on every real site, so a kit generated against
+   a real company would always report "no hiring page found" even when the correct page was
+   ranked #1. Fixed by running the fetched HTML through the same `extractPage()` the main crawl
+   step already uses. A regression test for this fails against the old code and passes against
+   the fix (verified by reverting and rerunning it).
+
+Verified afterwards with real Gemini and no mocks: the crawler found Linear's actual published
+process (*Application review → Early conversations → Team interviews → Work trial → Decision
+and offer*) and GitLab's actual 7-stage process from their live handbook. Stripe genuinely has
+no hiring page reachable within the budget — reported as `NO_HIRING_PAGE`, honestly, which is
+the correct outcome for a company whose careers portal is a separate JS-heavy system, not a bug.
+
 **Search is a provider chain**, and here is a measured fact rather than a hope. From a server
 IP on 2026-09-09: `html.duckduckgo.com` returns HTTP 202 with a bot-detection page,
 `www.mojeek.com` returns 200 with `<title>Captcha</title>`, and Marginalia answers normally.
