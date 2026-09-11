@@ -154,6 +154,9 @@ export async function createMongoDb(uri: string, dbName: string): Promise<Db> {
         const docs = await practice.find({ userId, kitId }).sort({ at: 1 }).limit(5_000).toArray();
         return docs.map((d) => strip(d)!).filter(Boolean);
       },
+      async clearForKit(userId, kitId) {
+        await practice.deleteMany({ userId, kitId });
+      },
     },
 
     cache: {

@@ -321,6 +321,16 @@ export function createKitsController(db: Db, runner: JobRunner) {
       res.json({ data: { events: events.map((e) => ({ cardId: e.cardId, confidence: e.confidence, at: e.at })) } });
     },
 
+    /** Resets practice progress for this kit. "Mastered"/"Covered" are lifetime stats by
+     * design (they drive spaced-repetition ordering across sessions), so a genuine restart
+     * needs an explicit action rather than just starting a new session. */
+    async clearPractice(req: AuthedRequest, res: Response): Promise<void> {
+      const record = await db.kits.findOwned(req.user.id, req.params.id!);
+      if (!record) throw ApiError.notFound('That kit does not exist.');
+      await db.practice.clearForKit(req.user.id, record.id);
+      res.json({ data: { events: [] } });
+    },
+
     async weakSpots(req: AuthedRequest, res: Response): Promise<void> {
       const record = await db.kits.findOwned(req.user.id, req.params.id!);
       if (!record?.kit) throw ApiError.notFound('That kit does not exist yet.');

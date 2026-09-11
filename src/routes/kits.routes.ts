@@ -37,6 +37,7 @@ export function kitsRoutes(config: Config, db: Db, runner: JobRunner): Router {
 
   router.post('/:id/practice', validate(PracticeBody), asyncRoute<AuthedRequest>(controller.recordPractice));
   router.get('/:id/practice', asyncRoute<AuthedRequest>(controller.listPractice));
+  router.delete('/:id/practice', asyncRoute<AuthedRequest>(controller.clearPractice));
   router.get('/:id/weak-spots', asyncRoute<AuthedRequest>(controller.weakSpots));
 
   return router;

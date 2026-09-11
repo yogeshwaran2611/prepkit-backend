@@ -92,6 +92,9 @@ export interface JobRepo {
 export interface PracticeRepo {
   record(event: Omit<PracticeEventRecord, 'id'>): Promise<void>;
   listForKit(userId: string, kitId: string): Promise<PracticeEventRecord[]>;
+  /** Resets practice progress for one kit — "Mastered"/"Covered" are lifetime stats, and a
+   *  user who wants to restart a practice session from zero needs a way to actually zero it. */
+  clearForKit(userId: string, kitId: string): Promise<void>;
 }
 
 export interface Db {

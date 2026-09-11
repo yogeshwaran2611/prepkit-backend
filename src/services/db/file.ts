@@ -168,6 +168,10 @@ export async function createFileDb(path: string): Promise<Db> {
           state.practice.filter((p) => p.userId === userId && p.kitId === kitId).sort((a, b) => a.at.localeCompare(b.at)),
         );
       },
+      async clearForKit(userId, kitId) {
+        state.practice = state.practice.filter((p) => !(p.userId === userId && p.kitId === kitId));
+        await persist();
+      },
     },
 
     cache: {
