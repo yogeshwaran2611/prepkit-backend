@@ -716,21 +716,58 @@ no values.
 
 ## Deployment
 
-- **Web → Vercel** (free). Set `NEXT_PUBLIC_API_URL` to the API's public URL.
-- **API → Fly.io** (free allowance) with `min_machines_running = 1`. Render's free tier sleeps
-  after ~15 minutes idle, which is the worst possible fit for a 90-second in-process job
-  streaming progress — and a grader arriving cold would wait through a 30–60 second start.
-  The job-document-plus-polling design means Render still *works*; Fly avoids the cold start.
-- **Database → MongoDB Atlas M0** (free), IP allowlist set to the API's egress.
-- **Both under one apex domain** (`app.example.com` + `api.example.com`,
-  `COOKIE_DOMAIN=.example.com`) so `COOKIE_MODE=same-site` is the deployed path. On raw
-  platform subdomains, set `COOKIE_MODE=cross-site` instead.
-- `/api/health` reports which store and model are live and whether a key is present, without
-  leaking either.
+**Live:**
+- Frontend — <https://prepkit-frontend-two.vercel.app>
+- Backend — <https://prepkit-backend-g9vo.onrender.com> (`/api/health` reports which store
+  and model are live and whether a key is present, without leaking either)
 
-After deploying, run `API=<api-url> WEB_ORIGIN=<web-url> npm run probe:cookie` — it checks the
-Origin echo, `Allow-Credentials`, the actual cookie flags against whether the deployment is
-cross-site, that the session round-trips, and that an off-allowlist origin is refused.
+**Platforms, and why they changed from the original plan.** The plan below (§15 originally)
+called for Fly.io specifically to avoid Render's free-tier cold start. In practice, Fly now
+requires credit card verification before any deploy, even on the free allowance — which
+conflicts with the brief's own "we will not ask you to pay for anything" position, card or
+not. Moved to **Render** instead, which needs no card, and accepted the documented cold-start
+trade-off — the job-document-plus-polling design (§6.2, §10.4) exists precisely so a cold
+start degrades the experience rather than breaking it.
+
+- **Web → Vercel** (free). `NEXT_PUBLIC_API_URL` set to the Render URL above.
+- **API → Render** (free web service, Docker runtime, reading this repo's `Dockerfile`).
+- **Database → MongoDB Atlas M0** (free). Network Access is `0.0.0.0/0` — Render's free tier
+  gives no fixed outbound IP to allowlist instead (static IPs are a paid Render feature), so
+  this is the standard pattern for a PaaS-to-Atlas connection: the real protection is the
+  connection string's credentials, not the IP filter.
+- **`COOKIE_MODE=cross-site`** — Vercel and Render are different domains, so this is the
+  cross-site path (§8), not the same-apex-domain one the original plan preferred.
+
+**Two real deploy bugs, found by actually deploying, not by reasoning about it:**
+
+1. **Wrong start path.** `tsconfig.json`'s `rootDir` is `.` (needed because it also compiles
+   `cli/`), so `tsc` preserves the `src/` prefix under `dist/` — it emits `dist/src/server.js`,
+   never `dist/server.js`. Both `package.json`'s `start` script and the `Dockerfile`'s `CMD`
+   pointed at the wrong path, and this was invisible locally because `npm run dev` always runs
+   through `tsx` (executes TypeScript directly; `dist/` never enters the picture) — only the
+   actual production build+start path was broken. The image built with zero errors, then
+   crashed on boot with `MODULE_NOT_FOUND`.
+2. **`node:22-slim`'s OpenSSL cannot complete a TLS handshake with Atlas.** Every deploy died
+   at `MongoClient.connect` with a generic TLS `internal_error` alert sent by Atlas's `mongod`
+   during the handshake itself — nothing to do with the connection string, credentials, or the
+   Network Access allowlist, all of which were already correct. This is a documented
+   incompatibility between Atlas and the minimal Debian OpenSSL build in `node:*-slim` images.
+   Fixed by switching the `Dockerfile`'s base image to the full (non-slim) `node:22`, which
+   ships a different OpenSSL build. Verified by building the image locally and running it
+   against the real Atlas cluster with Render's exact env vars *before* pushing again, rather
+   than guessing a second time.
+
+**Verified against the live deployment, not just locally** — `API=<url> WEB_ORIGIN=<url> npm
+run probe:cookie` against the URLs above:
+
+```
+✓ preflight echoes the exact Origin
+✓ preflight allows credentials
+✓ prepkit_session is SameSite=None; Secure — correct for a cross-site deployment
+✓ GET /api/auth/me with the cookie → 200 (session round-trips)
+✓ an origin outside the allowlist is not echoed
+PASS — auth works from the deployed frontend origin.
+```
 
 ---
 
